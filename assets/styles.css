@@ -1,0 +1,402 @@
+:root {
+    --paper: #fffdf8;
+    --ink: #111111;
+    --sub-ink: #544c46;
+    --line: rgba(17, 17, 17, 0.1);
+    --stamp: #a11717;
+    --shadow: 10px 10px 0 rgba(17, 17, 17, 0.96);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top right, rgba(161, 23, 23, 0.1), transparent 24rem),
+        linear-gradient(to bottom, transparent 35px, rgba(17, 17, 17, 0.035) 36px),
+        #ffffff;
+    background-size: auto, 100% 36px, auto;
+    color: var(--ink);
+    font-family: "Noto Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    padding: 32px 16px 64px;
+    position: relative;
+    overflow-x: hidden;
+}
+
+body::before,
+body::after {
+    content: "";
+    position: fixed;
+    width: 18rem;
+    height: 18rem;
+    border: 1px solid rgba(161, 23, 23, 0.14);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+}
+
+body::before {
+    top: -5rem;
+    right: -3rem;
+}
+
+body::after {
+    bottom: -7rem;
+    left: -5rem;
+}
+
+.paper-noise {
+    position: fixed;
+    inset: 0;
+    background-image:
+        radial-gradient(rgba(17, 17, 17, 0.05) 0.7px, transparent 0.8px),
+        radial-gradient(rgba(161, 23, 23, 0.04) 0.8px, transparent 0.9px);
+    background-position: 0 0, 14px 18px;
+    background-size: 18px 18px, 27px 27px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.poster {
+    width: min(100%, 980px);
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+.eyebrow {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 6px 10px;
+    border: 1px solid var(--ink);
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    background: rgba(255, 255, 255, 0.84);
+}
+
+.hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+    gap: 24px;
+    align-items: start;
+}
+
+.badge {
+    display: inline-block;
+    margin-bottom: 12px;
+    padding: 6px 12px;
+    border: 2px solid var(--stamp);
+    color: var(--stamp);
+    font-size: 0.95rem;
+    letter-spacing: 0.22em;
+    transform: rotate(-2deg);
+}
+
+.badge,
+.hero h1,
+.stamp {
+    font-family: "궁서", "Gungsuh", "Song Myung", serif;
+}
+
+.hero h1 {
+    font-size: clamp(2.3rem, 5vw, 4.4rem);
+    line-height: 1.1;
+    letter-spacing: -0.04em;
+    text-wrap: balance;
+}
+
+.hero-sub {
+    max-width: 34rem;
+    margin-top: 16px;
+    color: var(--sub-ink);
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    line-height: 1.7;
+}
+
+.hero-sub code {
+    font-family: "Courier New", monospace;
+    font-size: 0.88em;
+    background: rgba(17, 17, 17, 0.06);
+    padding: 0.12em 0.28em;
+}
+
+.hero-side {
+    padding: 18px;
+    border: 2px solid var(--ink);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 6px 6px 0 rgba(17, 17, 17, 0.95);
+}
+
+.side-note {
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.meta-board {
+    margin-top: 18px;
+    display: grid;
+    gap: 10px;
+}
+
+.meta-board div {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed rgba(17, 17, 17, 0.28);
+}
+
+.meta-board dt {
+    font-size: 0.9rem;
+    color: var(--sub-ink);
+}
+
+.meta-board dd {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.controls {
+    margin-top: 30px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 14px;
+}
+
+.action-btn {
+    appearance: none;
+    border: 2px solid var(--ink);
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--ink);
+    font: inherit;
+    font-size: 1.1rem;
+    padding: 12px 22px;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+    box-shadow: 4px 4px 0 rgba(17, 17, 17, 0.96);
+}
+
+.action-btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 6px 6px 0 rgba(17, 17, 17, 0.96);
+}
+
+.action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.action-btn.primary {
+    background: var(--ink);
+    color: #fff;
+}
+
+.status-line {
+    min-height: 1.5em;
+    color: var(--sub-ink);
+    font-size: 0.98rem;
+}
+
+.status-line.is-error {
+    color: var(--stamp);
+}
+
+.status-line.is-success {
+    color: var(--ink);
+}
+
+.lyrics-panel {
+    position: relative;
+    margin-top: 24px;
+    padding: 26px 22px 24px;
+    border: 2px solid var(--ink);
+    background:
+        linear-gradient(to bottom, rgba(161, 23, 23, 0.045), transparent 7rem),
+        var(--paper);
+    box-shadow: var(--shadow);
+}
+
+.panel-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed rgba(17, 17, 17, 0.3);
+    font-size: 0.92rem;
+    color: var(--sub-ink);
+}
+
+.panel-label {
+    letter-spacing: 0.16em;
+}
+
+.panel-code {
+    font-family: "Courier New", monospace;
+    font-size: 0.85rem;
+}
+
+.stamp {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 84px;
+    height: 84px;
+    border: 3px solid rgba(161, 23, 23, 0.72);
+    border-radius: 50%;
+    color: rgba(161, 23, 23, 0.82);
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.36em;
+    text-indent: 0.36em;
+    transform: rotate(-13deg) scale(0.86);
+    opacity: 0;
+    transition: opacity 180ms ease, transform 180ms ease;
+    pointer-events: none;
+}
+
+.lyrics-panel.is-ready .stamp {
+    opacity: 1;
+    transform: rotate(-11deg) scale(1);
+}
+
+.lyrics-list {
+    display: grid;
+    gap: 14px;
+    min-height: 240px;
+}
+
+.lyrics-panel.is-empty .lyrics-list::before {
+    content: "SENTENCE.json / RAPPER.json 준비 완료 후\A버튼을 눌러 킴보식을 출력하시오.";
+    display: grid;
+    place-items: center;
+    min-height: 240px;
+    color: rgba(17, 17, 17, 0.42);
+    text-align: center;
+    white-space: pre-line;
+    line-height: 1.9;
+    font-size: 1.05rem;
+}
+
+.line {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 12px 14px;
+    border: 1px dashed rgba(17, 17, 17, 0.3);
+    background: rgba(255, 255, 255, 0.72);
+    opacity: 0;
+    transform: translateY(8px);
+    animation: float-up 320ms ease forwards;
+}
+
+.line-index {
+    color: var(--stamp);
+    font-family: "Courier New", monospace;
+    font-size: 0.95rem;
+    letter-spacing: 0.16em;
+}
+
+.line-text {
+    font-size: clamp(1rem, 2.2vw, 1.25rem);
+    line-height: 1.9;
+    word-break: keep-all;
+}
+
+.rapper-tag {
+    display: inline-block;
+    padding: 0 0.2em;
+    color: var(--stamp);
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.15em;
+    font-weight: 700;
+}
+
+.footer-note {
+    margin-top: 28px;
+    color: rgba(17, 17, 17, 0.64);
+    font-size: 0.96rem;
+    line-height: 1.8;
+}
+
+@keyframes float-up {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 780px) {
+    body {
+        padding-top: 20px;
+        padding-bottom: 48px;
+    }
+
+    .hero {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-side {
+        width: 100%;
+    }
+
+    .controls {
+        align-items: stretch;
+    }
+
+    .action-btn {
+        width: 100%;
+    }
+
+    .panel-head {
+        flex-direction: column;
+        align-items: flex-start;
+        padding-right: 76px;
+    }
+
+    .stamp {
+        width: 74px;
+        height: 74px;
+        font-size: 0.95rem;
+        top: 16px;
+        right: 16px;
+    }
+}
+
+@media (max-width: 520px) {
+    .eyebrow {
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+    }
+
+    .hero h1 {
+        font-size: clamp(2rem, 9vw, 3rem);
+    }
+
+    .lyrics-panel {
+        padding: 22px 16px 18px;
+        box-shadow: 6px 6px 0 rgba(17, 17, 17, 0.96);
+    }
+
+    .line {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}
