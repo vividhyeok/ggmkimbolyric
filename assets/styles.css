@@ -111,7 +111,12 @@ body {
     font-size: clamp(0.72rem, 2.4vw, 0.84rem);
     line-height: 1.6;
     word-break: keep-all;
+    overflow-wrap: anywhere;
     color: #444444;
+}
+
+.footer-line {
+    display: block;
 }
 
 .action-bar {
@@ -209,6 +214,13 @@ body {
     .action-bar {
         padding-left: 12px;
         padding-right: 12px;
+    }
+
+    .footer {
+        margin-top: 12px;
+        font-size: clamp(0.7rem, 3.1vw, 0.82rem);
+        line-height: 1.55;
+        padding-inline: 2px;
     }
 }
 
