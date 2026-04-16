@@ -1,0 +1,206 @@
+const crypto = require("node:crypto");
+const { sentences, rappers } = require("./_lyrics-data");
+
+const LINE_COUNT = 16;
+const SECURE_PREFIX = "k2";
+const LEGACY_PREFIX = "k1";
+const SENTENCE_SALT = 17;
+const RAPPER_SALT = 53;
+// Set this in Vercel so share tokens stay stable across deployments.
+const TOKEN_SECRET = process.env.LYRIC_TOKEN_SECRET || "local-dev-only-change-this-before-deploy";
+const ENCRYPTION_KEY = crypto.createHash("sha256").update(TOKEN_SECRET).digest();
+const DATA_FINGERPRINT = crypto
+    .createHash("sha256")
+    .update(JSON.stringify({ sentences, rappers }))
+    .digest()
+    .readUInt32BE(0);
+
+module.exports = async function handler(request, response) {
+    if (request.method !== "GET") {
+        response.setHeader("Allow", "GET");
+        return response.status(405).json({ error: "Method Not Allowed" });
+    }
+
+    response.setHeader("Cache-Control", "no-store");
+
+    try {
+        const token = readToken(request);
+        const resolved = token ? resolveSharedLyrics(token) : createGeneratedLyrics();
+
+        if (!resolved) {
+            return response.status(400).json({ error: "Invalid share token." });
+        }
+
+        return response.status(200).json(resolved);
+    } catch (error) {
+        console.error(error);
+        return response.status(500).json({ error: "Failed to generate lyrics." });
+    }
+};
+
+function readToken(request) {
+    if (typeof request.query?.v === "string") {
+        return request.query.v;
+    }
+
+    const requestUrl = new URL(request.url, "http://localhost");
+    return requestUrl.searchParams.get("v") || "";
+}
+
+function resolveSharedLyrics(token) {
+    if (token.startsWith(SECURE_PREFIX)) {
+        const seed = decodeSecureSeed(token);
+        if (seed === null) {
+            return null;
+        }
+
+        const selection = createSelectionFromSeed(seed);
+        return buildPayload(selection, token);
+    }
+
+    if (token.startsWith(LEGACY_PREFIX)) {
+        const selection = decodeLegacySelection(token);
+        if (!selection.length) {
+            return null;
+        }
+
+        return buildPayload(selection, token);
+    }
+
+    return null;
+}
+
+function createGeneratedLyrics() {
+    const seed = crypto.randomBytes(4).readUInt32BE(0);
+    const selection = createSelectionFromSeed(seed);
+    const token = encodeSecureSeed(seed);
+
+    return buildPayload(selection, token);
+}
+
+function buildPayload(selection, token) {
+    return {
+        token,
+        lines: selection.map(({ sentenceIndex, rapperIndex }) =>
+            sentences[sentenceIndex].replaceAll("[래퍼]", rappers[rapperIndex]),
+        ),
+    };
+}
+
+function createSelectionFromSeed(seed) {
+    const rng = createMulberry32(seed);
+    const sentenceIndexes = pickUniqueIndexes(sentences.length, Math.min(LINE_COUNT, sentences.length), rng);
+
+    return sentenceIndexes.map((sentenceIndex) => ({
+        sentenceIndex,
+        rapperIndex: Math.floor(rng() * rappers.length),
+    }));
+}
+
+function createMulberry32(seed) {
+    let value = seed >>> 0;
+
+    return function next() {
+        value += 0x6d2b79f5;
+        let mixed = Math.imul(value ^ (value >>> 15), value | 1);
+        mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+        return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function pickUniqueIndexes(length, count, rng) {
+    const pool = Array.from({ length }, (_, index) => index);
+    const picked = [];
+
+    while (picked.length < count && pool.length) {
+        const index = Math.floor(rng() * pool.length);
+        picked.push(pool.splice(index, 1)[0]);
+    }
+
+    return picked;
+}
+
+function encodeSecureSeed(seed) {
+    const payload = Buffer.allocUnsafe(8);
+    payload.writeUInt32BE(seed >>> 0, 0);
+    payload.writeUInt32BE(DATA_FINGERPRINT, 4);
+
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+    const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
+    const tag = cipher.getAuthTag();
+
+    return SECURE_PREFIX + Buffer.concat([iv, encrypted, tag]).toString("base64url");
+}
+
+function decodeSecureSeed(token) {
+    try {
+        const packed = Buffer.from(token.slice(SECURE_PREFIX.length), "base64url");
+        if (packed.length !== 36) {
+            return null;
+        }
+
+        const iv = packed.subarray(0, 12);
+        const encrypted = packed.subarray(12, 20);
+        const tag = packed.subarray(20);
+        const decipher = crypto.createDecipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+        decipher.setAuthTag(tag);
+
+        const payload = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+        const seed = payload.readUInt32BE(0);
+        const fingerprint = payload.readUInt32BE(4);
+
+        return fingerprint === DATA_FINGERPRINT ? seed : null;
+    } catch {
+        return null;
+    }
+}
+
+function decodeLegacySelection(token) {
+    const body = reverseText(token.slice(LEGACY_PREFIX.length));
+    if (!body || body.length % 4 !== 0) {
+        return [];
+    }
+
+    const selection = [];
+
+    for (let index = 0; index < body.length / 4; index += 1) {
+        const offset = index * 4;
+        const sentenceValue = parseInt(body.slice(offset, offset + 2), 36);
+        const rapperValue = parseInt(body.slice(offset + 2, offset + 4), 36);
+
+        if (Number.isNaN(sentenceValue) || Number.isNaN(rapperValue)) {
+            return [];
+        }
+
+        selection.push({
+            sentenceIndex: wrapIndex(
+                sentenceValue - SENTENCE_SALT * (index + 1),
+                sentences.length,
+            ),
+            rapperIndex: wrapIndex(
+                rapperValue - RAPPER_SALT * (index + 1),
+                rappers.length,
+            ),
+        });
+    }
+
+    return selection.every(isValidSelection) ? selection : [];
+}
+
+function isValidSelection({ sentenceIndex, rapperIndex }) {
+    return Number.isInteger(sentenceIndex)
+        && Number.isInteger(rapperIndex)
+        && sentenceIndex >= 0
+        && rapperIndex >= 0
+        && sentenceIndex < sentences.length
+        && rapperIndex < rappers.length;
+}
+
+function wrapIndex(value, length) {
+    return ((value % length) + length) % length;
+}
+
+function reverseText(value) {
+    return [...value].reverse().join("");
+}
