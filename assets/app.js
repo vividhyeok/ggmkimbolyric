@@ -6,63 +6,42 @@ const state = {
 
 const elements = {};
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     cacheElements();
     bindEvents();
-    loadData();
+    await loadData();
 });
 
 function cacheElements() {
-    elements.generateBtn = document.getElementById("generateBtn");
-    elements.copyBtn = document.getElementById("copyBtn");
-    elements.statusLine = document.getElementById("statusLine");
-    elements.loadState = document.getElementById("loadState");
-    elements.sentenceCount = document.getElementById("sentenceCount");
-    elements.rapperCount = document.getElementById("rapperCount");
-    elements.lyricsPanel = document.getElementById("lyricsPanel");
-    elements.lyricsList = document.getElementById("lyricsList");
-    elements.panelCode = document.getElementById("panelCode");
+    elements.output = document.getElementById("output");
+    elements.lyrics = document.getElementById("lyrics");
+    elements.generateButton = document.getElementById("generateButton");
+    elements.copyButton = document.getElementById("copyButton");
 }
 
 function bindEvents() {
-    elements.generateBtn.addEventListener("click", generateLyrics);
-    elements.copyBtn.addEventListener("click", copyLyrics);
+    elements.generateButton.addEventListener("click", generateLyrics);
+    elements.copyButton.addEventListener("click", copyLyrics);
 }
 
 async function loadData() {
-    setStatus("JSON 문서를 봉인 해제하는 중...", "default");
-
     try {
-        const [sentencePayload, rapperPayload] = await Promise.all([
+        const [sentencesResponse, rappersResponse] = await Promise.all([
             fetchJson("./data/sentences.json"),
             fetchJson("./data/rappers.json"),
         ]);
 
-        state.sentences = Array.isArray(sentencePayload.sentences) ? sentencePayload.sentences : [];
-        state.rappers = Array.isArray(rapperPayload.rappers) ? rapperPayload.rappers : [];
+        state.sentences = Array.isArray(sentencesResponse.sentences) ? sentencesResponse.sentences : [];
+        state.rappers = Array.isArray(rappersResponse.rappers) ? rappersResponse.rappers : [];
 
         if (!state.sentences.length || !state.rappers.length) {
-            throw new Error("JSON payload is empty.");
+            throw new Error("Empty data.");
         }
 
-        elements.sentenceCount.textContent = `${state.sentences.length}개`;
-        elements.rapperCount.textContent = `${state.rappers.length}명`;
-        elements.loadState.textContent = "로드 완료";
-        elements.generateBtn.disabled = false;
-
-        setStatus(
-            `${state.sentences.length}개 문장과 ${state.rappers.length}명 래퍼를 불러왔습니다. 이제 뽑으면 됩니다.`,
-            "success",
-        );
+        elements.generateButton.disabled = false;
     } catch (error) {
         console.error(error);
-        elements.loadState.textContent = "로드 실패";
-
-        const message = location.protocol === "file:"
-            ? "이 구조는 정적 서버 기준입니다. GitHub나 Vercel에서 열거나 로컬 서버로 확인하세요."
-            : "JSON을 불러오지 못했습니다. 파일 경로와 배포 상태를 확인하세요.";
-
-        setStatus(message, "error");
+        elements.lyrics.innerHTML = '<p class="error">불러오기 실패</p>';
     }
 }
 
@@ -81,31 +60,24 @@ function generateLyrics() {
         return;
     }
 
-    const selectedSentences = pickUniqueItems(state.sentences, 4);
-    state.currentLines = [];
-    elements.lyricsList.innerHTML = "";
-    elements.lyricsPanel.classList.remove("is-empty");
-    elements.lyricsPanel.classList.add("is-ready");
-    elements.copyBtn.disabled = false;
-    elements.panelCode.textContent = createSerial();
-
-    selectedSentences.forEach((template, index) => {
+    const lines = pickUniqueItems(state.sentences, 4).map((sentence) => {
         const rapper = pickRandom(state.rappers);
-        const plainText = template.replaceAll("[래퍼]", rapper);
-        state.currentLines.push(plainText);
 
-        const line = document.createElement("article");
-        line.className = "line";
-        line.style.animationDelay = `${index * 90}ms`;
-        line.innerHTML = `
-            <span class="line-index">${String(index + 1).padStart(2, "0")}</span>
-            <p class="line-text">${renderSentence(template, rapper)}</p>
-        `;
-
-        elements.lyricsList.appendChild(line);
+        return {
+            plain: sentence.replaceAll("[래퍼]", rapper),
+            html: escapeHtml(sentence).replaceAll(
+                "[래퍼]",
+                `<span class="rapper">${escapeHtml(rapper)}</span>`,
+            ),
+        };
     });
 
-    setStatus("킴보식 출력 완료. 마음에 안 들면 다시 뽑으시오.", "success");
+    state.currentLines = lines.map((line) => line.plain);
+    elements.lyrics.innerHTML = lines
+        .map((line) => `<p class="line">${line.html}</p>`)
+        .join("");
+
+    elements.copyButton.disabled = false;
 }
 
 async function copyLyrics() {
@@ -119,17 +91,26 @@ async function copyLyrics() {
         if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(text);
         } else {
-            copyWithTextarea(text);
+            legacyCopy(text);
         }
 
-        setStatus("가사를 복사했습니다. GitHub에 올려서 Vercel에 박을 준비가 끝났습니다.", "success");
+        flashCopyLabel("복사됨");
     } catch (error) {
         console.error(error);
-        setStatus("복사에 실패했습니다. 브라우저 권한 상태를 확인하세요.", "error");
+        flashCopyLabel("실패");
     }
 }
 
-function copyWithTextarea(text) {
+function flashCopyLabel(label) {
+    const original = "복사";
+    elements.copyButton.textContent = label;
+
+    window.setTimeout(() => {
+        elements.copyButton.textContent = original;
+    }, 1000);
+}
+
+function legacyCopy(text) {
     const textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.setAttribute("readonly", "");
@@ -139,25 +120,6 @@ function copyWithTextarea(text) {
     textarea.select();
     document.execCommand("copy");
     document.body.removeChild(textarea);
-}
-
-function renderSentence(template, rapper) {
-    return escapeHtml(template).replaceAll(
-        "[래퍼]",
-        `<span class="rapper-tag">${escapeHtml(rapper)}</span>`,
-    );
-}
-
-function escapeHtml(value) {
-    const table = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        "\"": "&quot;",
-        "'": "&#39;",
-    };
-
-    return value.replace(/[&<>\"']/g, (character) => table[character]);
 }
 
 function pickRandom(items) {
@@ -176,21 +138,14 @@ function pickUniqueItems(items, count) {
     return picked;
 }
 
-function createSerial() {
-    const serial = Math.floor(Math.random() * 900) + 100;
-    return `NO. GGM-KIMBO-${serial}`;
-}
+function escapeHtml(value) {
+    const replacements = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
+    };
 
-function setStatus(message, tone) {
-    elements.statusLine.textContent = message;
-    elements.statusLine.classList.remove("is-error", "is-success");
-
-    if (tone === "error") {
-        elements.statusLine.classList.add("is-error");
-        return;
-    }
-
-    if (tone === "success") {
-        elements.statusLine.classList.add("is-success");
-    }
+    return value.replace(/[&<>\"']/g, (character) => replacements[character]);
 }
