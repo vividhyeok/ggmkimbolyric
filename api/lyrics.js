@@ -2,6 +2,9 @@ const crypto = require("node:crypto");
 const { sentences, rappers } = require("./_lyrics-data");
 
 const LINE_COUNT = 16;
+const BAR_TARGET_SYLLABLES = 18;
+const BAR_MAX_SYLLABLES = 24;
+const BAR_MIN_SYLLABLES = 8;
 const SECURE_PREFIX = "k2";
 const LEGACY_PREFIX = "k1";
 const SENTENCE_SALT = 17;
@@ -79,11 +82,28 @@ function createGeneratedLyrics() {
 }
 
 function buildPayload(selection, token) {
+    const bars = [];
+
+    for (const { sentenceIndex, rapperIndex } of selection) {
+        const fullLine = sentences[sentenceIndex].replaceAll("[래퍼]", rappers[rapperIndex]);
+        const splitBars = splitIntoBars(fullLine);
+
+        for (const bar of splitBars) {
+            bars.push(bar);
+
+            if (bars.length >= LINE_COUNT) {
+                break;
+            }
+        }
+
+        if (bars.length >= LINE_COUNT) {
+            break;
+        }
+    }
+
     return {
         token,
-        lines: selection.map(({ sentenceIndex, rapperIndex }) =>
-            sentences[sentenceIndex].replaceAll("[래퍼]", rappers[rapperIndex]),
-        ),
+        lines: bars,
     };
 }
 
@@ -118,6 +138,54 @@ function pickUniqueIndexes(length, count, rng) {
     }
 
     return picked;
+}
+
+function splitIntoBars(text, depth = 0) {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    const syllableCount = countBeatSyllables(normalized);
+
+    if (!normalized) {
+        return [];
+    }
+
+    if (syllableCount <= BAR_MAX_SYLLABLES || depth >= 2 || !normalized.includes(" ")) {
+        return [normalized];
+    }
+
+    const words = normalized.split(" ");
+    let bestSplit = null;
+
+    for (let index = 1; index < words.length; index += 1) {
+        const left = words.slice(0, index).join(" ");
+        const right = words.slice(index).join(" ");
+        const leftCount = countBeatSyllables(left);
+        const rightCount = countBeatSyllables(right);
+
+        if (leftCount < BAR_MIN_SYLLABLES || rightCount < BAR_MIN_SYLLABLES) {
+            continue;
+        }
+
+        const score = Math.abs(leftCount - BAR_TARGET_SYLLABLES) + Math.abs(rightCount - BAR_TARGET_SYLLABLES);
+
+        if (!bestSplit || score < bestSplit.score) {
+            bestSplit = { left, right, score };
+        }
+    }
+
+    if (!bestSplit) {
+        return [normalized];
+    }
+
+    return [
+        ...splitIntoBars(bestSplit.left, depth + 1),
+        ...splitIntoBars(bestSplit.right, depth + 1),
+    ];
+}
+
+function countBeatSyllables(text) {
+    const compact = text.replace(/\s+/g, "");
+    const matches = compact.match(/[가-힣A-Za-z0-9]/g);
+    return matches ? matches.length : 0;
 }
 
 function encodeSecureSeed(seed) {
