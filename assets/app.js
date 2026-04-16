@@ -93,28 +93,17 @@ async function shareLyrics() {
         return;
     }
 
-    const shareUrl = buildShareUrl(state.currentToken);
-    const shareData = {
-        title: document.title,
-        text: state.currentLines.join("\n"),
-        url: shareUrl,
-    };
+    const lyricsText = state.currentLines.join("\n");
 
     try {
-        if (navigator.share) {
-            await navigator.share(shareData);
-            flashShareLabel("공유됨");
-            return;
-        }
-
         if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(shareUrl);
-            flashShareLabel("링크복사");
+            await navigator.clipboard.writeText(lyricsText);
+            flashShareLabel("가사복사");
             return;
         }
 
-        window.prompt("이 링크로 공유", shareUrl);
-        flashShareLabel("링크생성");
+        window.prompt("가사를 복사해 주세요", lyricsText);
+        flashShareLabel("복사용");
     } catch (error) {
         if (error?.name === "AbortError") {
             return;
@@ -123,12 +112,6 @@ async function shareLyrics() {
         console.error(error);
         flashShareLabel("실패");
     }
-}
-
-function buildShareUrl(token) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("v", token);
-    return url.toString();
 }
 
 function replaceUrl(token) {
