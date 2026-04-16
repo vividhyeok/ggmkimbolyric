@@ -2,7 +2,6 @@ const crypto = require("node:crypto");
 const { sentences, rappers } = require("./_lyrics-data");
 
 const LINE_COUNT = 16;
-const CLUSTER_SIZE = 4;
 const BAR_TARGET_SYLLABLES = 15;
 const BAR_MAX_SYLLABLES = 20;
 const BAR_MIN_SYLLABLES = 7;
@@ -19,72 +18,6 @@ const DATA_FINGERPRINT = crypto
     .update(JSON.stringify({ sentences, rappers }))
     .digest()
     .readUInt32BE(0);
-const ECHO_FAMILIES = [
-    { a: "빙글빙글", b: "빙빙", c: "빙글대며", d: "빙글 모드" },
-    { a: "실실실실", b: "실실", c: "실실대며", d: "실실 모드" },
-    { a: "덜컹덜컹", b: "덜컹", c: "덜컹대며", d: "덜컹 모드" },
-    { a: "우당탕탕", b: "우당탕", c: "우당거리며", d: "우당 모드" },
-    { a: "반짝반짝", b: "반짝", c: "반짝대며", d: "반짝 모드" },
-    { a: "출렁출렁", b: "출렁", c: "출렁대며", d: "출렁 모드" },
-    { a: "쭈뼛쭈뼛", b: "쭈뼛", c: "쭈뼛대며", d: "쭈뼛 모드" },
-    { a: "히죽히죽", b: "히죽", c: "히죽대며", d: "히죽 모드" },
-];
-const STREET_PLACES = ["피시방", "이발소", "노래방", "편의점", "분식집", "문방구", "당구장", "세탁방", "놀이터", "핫도그집"];
-const STREET_ACTS = [
-    "꼭짓점 춤 춰",
-    "부채춤 춰",
-    "리코더만 불어",
-    "하모니카만 불어",
-    "박수만 박아",
-    "어깨만 튕겨",
-    "슬리퍼 끌고 돌아",
-    "그림자 밟고 따라다녀",
-    "'잡았다 요놈' 하고 말 걸어",
-    "회전의자 탄 척 밀고 가",
-    "피시방에서 새피만 갈겨",
-    "스텝만 밟아",
-];
-const SECOND_ACTS = [
-    "빙글 돌아",
-    "혼자 코러스 넣어",
-    "목만 까딱여",
-    "박자 없이 스텝 밟아",
-    "회전의자 탄 척해",
-    "휘파람만 불어",
-    "케스터네츠만 쳐",
-    "발뒤꿈치만 튕겨",
-    "문 앞에서 대기만 타",
-];
-const PROPS = ["케스터네츠", "종이컵", "물티슈", "회전의자", "형광펜", "수박바", "딸기우유", "마이크커버", "핫식스", "리코더"];
-const ITEMS = ["슬리퍼", "모자", "후드집업", "텀블러", "의자", "장바구니", "키보드", "스피커", "신발끈", "이어폰 케이스"];
-const STICKERS = ["형광 리본", "포스트잇", "딸기잼", "초코시럽", "비닐장갑", "색종이", "빨대 세 개", "반짝이 스티커", "구슬", "휴지심"];
-const ATTACH_VERBS = ["붙여놔", "매달아놔", "꽂아놔", "감아놔", "채워놔", "올려놔", "끼워놔"];
-const STUDIO_NOISES = [
-    "하모니카만 불어",
-    "박수만 쳐",
-    "테이블만 두드려",
-    "코러스 흉내 내",
-    "헤드폰 없이 끄덕여",
-    "의자 끌고 드리프트해",
-    "케스터네츠만 쳐",
-    "방음문 앞에서 발만 굴러",
-    "마이크보다 크게 콧노래해",
-];
-const FOOD_SHOPS = ["분식집", "편의점", "떡볶이집", "토스트집", "핫도그집", "김밥집"];
-const FOODS = ["삼각김밥", "소시지", "핫바", "식혜", "딸기우유", "군만두", "토스트", "컵라면"];
-const FOOD_TOPPINGS = ["케첩만", "머스터드만", "후추만", "파슬리만", "딸기잼만", "초코시럽만", "얼음만"];
-const FASHION_LOOKS = ["선글라스 끼고", "비니 눌러쓰고", "후드 뒤집어쓰고", "트레이닝복 입고", "양말 질질 끌고", "목도리 두르고", "슬리퍼 신고"];
-const FASHION_MOVES = ["런웨이처럼 걸어", "거울 앞에서 포즈만 잡아", "혼자 워킹해", "어깨만 으쓱해", "주머니에 손 넣고 빙글 돌아"];
-const CLOSERS = [
-    "오늘도 앞줄만 점령해",
-    "오늘도 괜히 더 튀어",
-    "오늘도 폼만 잔뜩 잡어",
-    "오늘도 박자보다 먼저 나가",
-    "오늘도 분위기만 괜히 흔들어",
-    "오늘도 동네만 괜히 시끄럽혀",
-    "오늘도 스텝만 괜히 앞서가",
-    "오늘도 웃음만 먼저 터뜨려",
-];
 
 module.exports = async function handler(request, response) {
     if (request.method !== "GET") {
@@ -194,16 +127,15 @@ function createClusterLyrics(seed) {
     const rng = createMulberry32(seed);
     const lines = [];
     const usedRappers = new Set();
-    const clusterCount = Math.ceil(LINE_COUNT / CLUSTER_SIZE);
+    const sentenceOrder = pickUniqueIndexes(sentences.length, sentences.length, rng);
 
-    for (let index = 0; index < clusterCount; index += 1) {
+    for (const sentenceIndex of sentenceOrder) {
         const rapper = pickRapper(rng, usedRappers);
-        const family = pickFrom(ECHO_FAMILIES, rng);
-        const builder = pickFrom(CLUSTER_BUILDERS, rng);
-        const clusterLines = builder(rng, rapper, family);
+        const fullLine = sentences[sentenceIndex].replaceAll("[래퍼]", rapper);
+        const splitBars = splitByWordCount(fullLine, 6);
 
-        for (const line of clusterLines) {
-            lines.push(line);
+        for (const bar of splitBars) {
+            lines.push(bar);
 
             if (lines.length >= LINE_COUNT) {
                 return lines;
@@ -249,8 +181,11 @@ function pickUniqueIndexes(length, count, rng) {
 
 function pickRapper(rng, usedRappers) {
     const available = rappers.filter((rapper) => !usedRappers.has(rapper));
-    const pool = available.length ? available : rappers;
-    const rapper = pickFrom(pool, rng);
+    if (!available.length) {
+        throw new Error("Not enough unique rappers to build lyrics.");
+    }
+
+    const rapper = pickFrom(available, rng);
     usedRappers.add(rapper);
     return rapper;
 }
@@ -313,6 +248,37 @@ function countBeatSyllables(text) {
         const latinWeight = Math.max(1, Math.min(3, Math.ceil(latinLength / 4)));
         return total + latinWeight;
     }, 0);
+}
+
+function splitByWordCount(text, chunkSize = 6) {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+        return [];
+    }
+
+    const words = normalized.split(" ");
+    if (words.length <= chunkSize) {
+        return [normalized];
+    }
+
+    const chunks = [];
+
+    for (let index = 0; index < words.length; index += chunkSize) {
+        chunks.push(words.slice(index, index + chunkSize));
+    }
+
+    if (chunks.length > 1) {
+        const lastChunk = chunks[chunks.length - 1];
+        const prevChunk = chunks[chunks.length - 2];
+
+        if (lastChunk.length <= 2 && prevChunk.length > 4) {
+            while (lastChunk.length < 4 && prevChunk.length > 4) {
+                lastChunk.unshift(prevChunk.pop());
+            }
+        }
+    }
+
+    return chunks.map((chunk) => chunk.join(" "));
 }
 
 function encodeSecureSeed(seed, prefix) {
@@ -399,78 +365,3 @@ function wrapIndex(value, length) {
 function reverseText(value) {
     return [...value].reverse().join("");
 }
-
-function buildStreetCluster(rng, rapper, family) {
-    const place = pickFrom(STREET_PLACES, rng);
-    const place2 = pickFrom(STREET_PLACES, rng);
-    const prop = pickFrom(PROPS, rng);
-    const item = pickFrom(ITEMS, rng);
-    const sticker = pickFrom(STICKERS, rng);
-
-    return [
-        `${rapper} 동네 ${place} 앞에서 ${pickFrom(STREET_ACTS, rng)}`,
-        `${family.a} ${family.b}, ${prop} 들고 ${pickFrom(SECOND_ACTS, rng)}`,
-        `${rapper} ${item} 위에 ${sticker}만 ${pickFrom(ATTACH_VERBS, rng)}`,
-        `${family.c} ${family.a}, 오늘도 ${place2} 앞을 접수해`,
-    ];
-}
-
-function buildStudioCluster(rng, rapper, family) {
-    const prop = pickFrom(PROPS, rng);
-    const item = pickFrom(ITEMS, rng);
-    const sticker = pickFrom(STICKERS, rng);
-
-    return [
-        `${rapper} 작업실 복도에서 ${pickFrom(STUDIO_NOISES, rng)}`,
-        `${family.a} ${family.b}, ${prop}로 박수만 쳐`,
-        `${rapper} ${item} 옆에 ${sticker}만 ${pickFrom(ATTACH_VERBS, rng)}`,
-        `${family.c} ${family.a}, 세션보다 내가 더 튀어`,
-    ];
-}
-
-function buildFoodCluster(rng, rapper, family) {
-    const shop = pickFrom(FOOD_SHOPS, rng);
-    const food = pickFrom(FOODS, rng);
-    const food2 = pickFrom(FOODS, rng);
-    const topping = pickFrom(FOOD_TOPPINGS, rng);
-
-    return [
-        `${rapper} 단골 ${shop} 가서 ${food}만 집어`,
-        `${family.a} ${family.b}, ${food2} 위에 ${topping} 더 뿌려`,
-        `${rapper} 장바구니에 ${pickFrom(FOODS, rng)}만 가득 담아`,
-        `${family.c} ${family.a}, 계산 안 하고 포즈만 잡어`,
-    ];
-}
-
-function buildFashionCluster(rng, rapper, family) {
-    const prop = pickFrom(PROPS, rng);
-    const sticker = pickFrom(STICKERS, rng);
-
-    return [
-        `${rapper} ${pickFrom(FASHION_LOOKS, rng)} ${pickFrom(FASHION_MOVES, rng)}`,
-        `${family.a} ${family.b}, ${prop} 들고 거울만 봐`,
-        `${rapper} 후드끈에 ${sticker}만 ${pickFrom(ATTACH_VERBS, rng)}`,
-        `${family.c} ${family.a}, 오늘도 폼만 잔뜩 잡어`,
-    ];
-}
-
-function buildStageCluster(rng, rapper, family) {
-    const prop = pickFrom(PROPS, rng);
-    const item = pickFrom(ITEMS, rng);
-    const place = pickFrom(["무대 뒤", "백스테이지", "리허설장", "조명 밑", "복도 끝"], rng);
-
-    return [
-        `${rapper} ${place}에서 ${pickFrom(STREET_ACTS, rng)}`,
-        `${family.a} ${family.b}, ${prop}만 흔들어`,
-        `${rapper} ${item} 옆에 박수 소리만 덧칠해`,
-        `${family.c} ${family.a}, ${pickFrom(CLOSERS, rng)}`,
-    ];
-}
-
-const CLUSTER_BUILDERS = [
-    buildStreetCluster,
-    buildStudioCluster,
-    buildFoodCluster,
-    buildFashionCluster,
-    buildStageCluster,
-];
