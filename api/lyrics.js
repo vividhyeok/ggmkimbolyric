@@ -29,7 +29,7 @@ module.exports = async function handler(request, response) {
 
     try {
         const token = readToken(request);
-        const resolved = token ? resolveSharedLyrics(token) : createGeneratedLyrics();
+        const resolved = token ? await resolveSharedLyricsAsync(token) : await createGeneratedLyricsAsync();
 
         if (!resolved) {
             return response.status(400).json({ error: "Invalid share token." });
@@ -83,11 +83,25 @@ function resolveSharedLyrics(token) {
     return null;
 }
 
+async function resolveSharedLyricsAsync(token) {
+    const result = resolveSharedLyrics(token);
+    if (!result) return null;
+    
+    result.lines = await polishWithDeepseek(result.lines);
+    return result;
+}
+
 function createGeneratedLyrics() {
     const seed = crypto.randomBytes(4).readUInt32BE(0);
     const token = encodeSecureSeed(seed, SECURE_PREFIX);
 
     return buildGeneratedPayload(seed, token);
+}
+
+async function createGeneratedLyricsAsync() {
+    const result = createGeneratedLyrics();
+    result.lines = await polishWithDeepseek(result.lines);
+    return result;
 }
 
 function buildGeneratedPayload(seed, token) {
@@ -468,4 +482,85 @@ function wrapIndex(value, length) {
 
 function reverseText(value) {
     return [...value].reverse().join("");
+}
+
+async function polishWithDeepseek(lines) {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    
+    // API 키 없으면 원본 반환
+    if (!apiKey) {
+        return lines;
+    }
+
+    try {
+        const prompt = `다음 16줄 가사를 킴보 스타일로 다시 배치해줘.
+
+주의사항:
+1. 문장 내용은 절대 수정하지 말 것 (문장 구조 유지)
+2. 각 줄은 5~7어절을 목표로:
+   - 5~7어절이 기본 (자연스러운 랩 플로우)
+   - 음절이 많으면 8~9어절도 괜찮음
+   - 음절이 적으면 4어절 이상 (너무 짧으면 안 됨)
+   - 목표: 줄마다 자연스럽고 균형잡힌 구조
+3. 마지막 문장은 완전한 문법적 완결로 끝나야 함 (중단/불완전하지 않게)
+4. 받침 유무에 따른 조사 자동 정정:
+   - 받침 있는 단어 뒤: 이, 을(를), 고, 로(으로)
+   - 받침 없는 단어 뒤: 가, 를, 고, 로
+   예: '래퍼이 말했다' → '래퍼가 말했다'
+5. 중복 조사나 문법적 오류 수정
+6. 결과는 정확히 16줄이어야 함
+7. 줄바꿈과 배치만 정리해서 자연스럽고 임팩트 있게
+
+원본:
+${lines.join("\n")}
+
+정정된 16줄을 한 줄씩 출력하기 (다른 설명 없이):`;
+
+        const response = await fetch("https://api.deepseek.com/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model: "deepseek-chat",
+                messages: [
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 500
+            })
+        });
+
+        if (!response.ok) {
+            console.error(`DeepSeek API error: ${response.status}`);
+            return lines;
+        }
+
+        const json = await response.json();
+        if (!json.choices || !json.choices[0] || !json.choices[0].message) {
+            console.error("Invalid DeepSeek response structure");
+            return lines;
+        }
+
+        const polished = json.choices[0].message.content
+            .split("\n")
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .slice(0, 16);
+
+        // 16줄 확보 못 했으면 원본 반환
+        if (polished.length < 16) {
+            console.warn(`DeepSeek returned ${polished.length} lines, expected 16. Returning original.`);
+            return lines;
+        }
+
+        return polished;
+    } catch (error) {
+        console.error("DeepSeek polishing failed:", error.message);
+        return lines; // 실패 시 원본 반환
+    }
 }
