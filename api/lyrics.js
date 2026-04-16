@@ -116,7 +116,7 @@ function buildLegacyPayload(selection, token) {
 
     for (const { sentenceIndex, rapperIndex } of selection) {
         const fullLine = renderSentenceWithRapper(sentences[sentenceIndex], rappers[rapperIndex]);
-        const splitBars = splitIntoBars(fullLine).map((bar) => ensureMinimumEojeol(bar, 6));
+        const splitBars = splitIntoBars(fullLine).map((bar) => ensureEojeolRange(bar, 4, 6));
 
         for (const bar of splitBars) {
             bars.push(bar);
@@ -150,7 +150,7 @@ function createClusterLyrics(seed) {
 
         const rapper = pickRapper(rng, usedRappers);
         const fullLine = renderSentenceWithRapper(sentences[sentenceIndex], rapper);
-        const splitBars = splitByWordCount(fullLine, 6).map((bar) => ensureMinimumEojeol(bar, 6));
+        const splitBars = splitByWordCount(fullLine, 5).map((bar) => ensureEojeolRange(bar, 4, 6));
         candidates.push({
             sentenceIndex,
             rapper,
@@ -330,68 +330,38 @@ function renderSentenceWithRapper(sentence, rapper) {
         return sentence;
     }
 
-    const pairParticles = [
-        ["으로", "로"],
-        ["까지", "까지"],
-        ["부터", "부터"],
-        ["에게", "에게"],
-        ["한테", "한테"],
-        ["처럼", "처럼"],
-        ["보다", "보다"],
-        ["조차", "조차"],
-        ["마저", "마저"],
-        ["마냥", "마냥"],
-        ["만", "만"],
-        ["도", "도"],
-        ["랑", "랑"],
-        ["하고", "하고"],
-        ["의", "의"],
-        ["은", "는"],
-        ["를", "를"],
-        ["이", "가"],
-        ["과", "와"],
-    ];
-
-    let rendered = sentence;
-
-    for (const [withFinal, withoutFinal] of pairParticles) {
-        const pattern = new RegExp(`\\[래퍼\\]${withFinal}`, "g");
-        rendered = rendered.replace(pattern, `${rapper}${chooseParticle(rapper, withFinal, withoutFinal)}`);
-    }
-
-    rendered = rendered.replace(/\[래퍼\]/g, `${rapper}가`);
-    return rendered;
+    return sentence.replace(/\[래퍼\](으로|로|까지|부터|에게|한테|처럼|보다|조차|마저|마냥|만|도|랑|하고|의|은|는|를|을|이|가|과|와)?/g, (_, suffix = "") => {
+        return `${rapper}${chooseParticleForSuffix(rapper, suffix)}`;
+    });
 }
 
-function chooseParticle(rapper, withFinal, withoutFinal) {
-    if (!rapper) {
-        return withoutFinal;
+function chooseParticleForSuffix(rapper, suffix) {
+    if (!rapper || !suffix) {
+        return "";
     }
 
     const lastCharacter = rapper.trim().slice(-1);
     const hasFinalConsonant = hasFinalConsonantInHangul(lastCharacter);
 
-    if (withFinal === "으로") {
-        return hasFinalConsonant ? "으로" : "로";
+    switch (suffix) {
+        case "으로":
+        case "로":
+            return hasFinalConsonant ? "으로" : "로";
+        case "이":
+        case "가":
+            return hasFinalConsonant ? "이" : "가";
+        case "은":
+        case "는":
+            return hasFinalConsonant ? "은" : "는";
+        case "을":
+        case "를":
+            return hasFinalConsonant ? "을" : "를";
+        case "과":
+        case "와":
+            return hasFinalConsonant ? "과" : "와";
+        default:
+            return suffix;
     }
-
-    if (withFinal === "이") {
-        return hasFinalConsonant ? "이" : "가";
-    }
-
-    if (withFinal === "은") {
-        return hasFinalConsonant ? "은" : "는";
-    }
-
-    if (withFinal === "을") {
-        return hasFinalConsonant ? "을" : "를";
-    }
-
-    if (withFinal === "과") {
-        return hasFinalConsonant ? "과" : "와";
-    }
-
-    return withoutFinal;
 }
 
 function hasFinalConsonantInHangul(character) {
@@ -421,7 +391,7 @@ function countBeatSyllables(text) {
     }, 0);
 }
 
-function splitByWordCount(text, chunkSize = 6) {
+function splitByWordCount(text, chunkSize = 5) {
     const normalized = text.replace(/\s+/g, " ").trim();
     if (!normalized) {
         return [];
@@ -438,7 +408,7 @@ function splitByWordCount(text, chunkSize = 6) {
         chunks.push(words.slice(index, index + chunkSize));
     }
 
-    rebalanceTailChunk(chunks, 6);
+    rebalanceTailChunk(chunks, 4);
 
     return chunks.map((chunk) => chunk.join(" "));
 }
@@ -467,7 +437,7 @@ function splitByTargetLineCount(text, lineCount) {
         chunks[slot].push(words[index]);
     }
 
-    rebalanceTailChunk(chunks, 6);
+    rebalanceTailChunk(chunks, 4);
 
     return chunks
         .filter((chunk) => chunk.length > 0)
@@ -496,12 +466,20 @@ function rebalanceTailChunk(chunks, minimumTailWords) {
 }
 
 function finalizeGeneratedLines(lines) {
-    return lines
-        .map((line, index) => ensureMinimumEojeol(line, 6, index === lines.length - 1))
+    const normalized = lines
+        .map((line, index) => ensureEojeolRange(line, 4, 6, index === lines.length - 1))
         .slice(0, LINE_COUNT);
+
+    if (normalized.length < LINE_COUNT) {
+        while (normalized.length < LINE_COUNT) {
+            normalized.push(ensureEojeolRange("", 4, 6, normalized.length === LINE_COUNT - 1));
+        }
+    }
+
+    return normalized.slice(0, LINE_COUNT);
 }
 
-function ensureMinimumEojeol(line, minimumCount, isFinalLine = false) {
+function ensureEojeolRange(line, minimumCount, maximumCount, isFinalLine = false) {
     const normalized = String(line || "").replace(/\s+/g, " ").trim();
     const words = normalized ? normalized.split(" ") : [];
     const fillers = isFinalLine ? FINAL_LINE_FILLERS : GENERAL_FILLERS;
@@ -512,18 +490,16 @@ function ensureMinimumEojeol(line, minimumCount, isFinalLine = false) {
         cursor += 1;
     }
 
-    if (words.length > 0) {
-        const lastWord = words[words.length - 1];
-        if (/[,·…-]$/.test(lastWord)) {
-            words[words.length - 1] = lastWord.replace(/[,·…-]+$/, "");
-        }
+    while (words.length > maximumCount) {
+        words.pop();
     }
 
-    return words.join(" ").replace(/\s+/g, " ").trim();
+    const cleaned = words.join(" ").replace(/\s+/g, " ").trim();
+    return cleaned || (isFinalLine ? FINAL_LINE_FILLERS[0] : GENERAL_FILLERS[0]);
 }
 
-const GENERAL_FILLERS = ["끝까지", "한 번 더", "다시", "그대로", "바로", "천천히"];
-const FINAL_LINE_FILLERS = ["마무리해", "여기서 닫아", "끝까지 가", "이제 끝내", "마침표 찍어", "여기서 끝"];
+const GENERAL_FILLERS = ["조금", "살짝", "바로", "다시", "훅", "그냥"];
+const FINAL_LINE_FILLERS = ["여기서 끝", "딱 여기서 끝", "이제 마무리", "이쯤에서 끝", "마침표 찍어", "여기서 닫아"];
 
 function encodeSecureSeed(seed, prefix) {
     const payload = Buffer.allocUnsafe(8);
