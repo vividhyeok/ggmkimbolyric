@@ -83,7 +83,7 @@ body {
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 8px;
     overflow: auto;
 }
 
@@ -95,7 +95,7 @@ body {
 
 .line {
     font-size: clamp(1.04rem, 3vw, 1.22rem);
-    line-height: 1.9;
+    line-height: 1.6;
     word-break: keep-all;
     overflow-wrap: anywhere;
 }
