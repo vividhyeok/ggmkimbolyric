@@ -2,9 +2,9 @@ const crypto = require("node:crypto");
 const { sentences, rappers } = require("./_lyrics-data");
 
 const LINE_COUNT = 16;
-const BAR_TARGET_SYLLABLES = 18;
-const BAR_MAX_SYLLABLES = 24;
-const BAR_MIN_SYLLABLES = 8;
+const BAR_TARGET_SYLLABLES = 15;
+const BAR_MAX_SYLLABLES = 20;
+const BAR_MIN_SYLLABLES = 7;
 const SECURE_PREFIX = "k2";
 const LEGACY_PREFIX = "k1";
 const SENTENCE_SALT = 17;
@@ -183,9 +183,17 @@ function splitIntoBars(text, depth = 0) {
 }
 
 function countBeatSyllables(text) {
-    const compact = text.replace(/\s+/g, "");
-    const matches = compact.match(/[가-힣A-Za-z0-9]/g);
-    return matches ? matches.length : 0;
+    const tokens = text.match(/[가-힣]+|[A-Za-z0-9]+(?:[._'-][A-Za-z0-9]+)*/g) || [];
+
+    return tokens.reduce((total, token) => {
+        if (/^[가-힣]+$/.test(token)) {
+            return total + token.length;
+        }
+
+        const latinLength = token.replace(/[^A-Za-z0-9]/g, "").length;
+        const latinWeight = Math.max(1, Math.min(3, Math.ceil(latinLength / 4)));
+        return total + latinWeight;
+    }, 0);
 }
 
 function encodeSecureSeed(seed) {
