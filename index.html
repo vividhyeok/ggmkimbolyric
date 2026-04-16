@@ -9,17 +9,25 @@
 </head>
 <body>
     <main class="app">
-        <h1 class="title">지지엠 킴보식 가사 생성기</h1>
-        <p class="intro">지지엠 킴보식 가사 생성기와 함께라면 당신도 지지엠 킴보식 가사를 만들 수 있습니다!</p>
+        <header class="hero">
+            <h1 class="title">지지엠 킴보식<br>가사 생성기</h1>
+            <p class="intro">지지엠 킴보식 가사 생성기와 함께라면<br>당신도 지지엠 킴보식 가사를 만들 수 있습니다!</p>
+        </header>
 
         <section class="output" id="output" aria-live="polite">
             <div class="lyrics" id="lyrics"></div>
         </section>
 
-        <div class="controls">
-            <button class="button" id="generateButton" type="button" disabled>생성</button>
-            <button class="button" id="copyButton" type="button" disabled>복사</button>
-        </div>
+        <footer class="footer">
+            본 페이지는 지지엠 킴보식 가사 생성 웹페이지입니다. 실제 아티스트와 무관합니다.
+        </footer>
     </main>
+
+    <div class="action-bar">
+        <div class="action-bar-inner">
+            <button class="button" id="generateButton" type="button" disabled>생성</button>
+            <button class="button" id="shareButton" type="button" disabled>내 가사 공유하기</button>
+        </div>
+    </div>
 </body>
 </html>
