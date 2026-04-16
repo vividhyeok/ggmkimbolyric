@@ -115,8 +115,8 @@ function buildLegacyPayload(selection, token) {
     const bars = [];
 
     for (const { sentenceIndex, rapperIndex } of selection) {
-        const fullLine = sentences[sentenceIndex].replaceAll("[래퍼]", rappers[rapperIndex]);
-        const splitBars = splitIntoBars(fullLine);
+        const fullLine = renderSentenceWithRapper(sentences[sentenceIndex], rappers[rapperIndex]);
+        const splitBars = splitIntoBars(fullLine).map((bar) => ensureMinimumEojeol(bar, 6));
 
         for (const bar of splitBars) {
             bars.push(bar);
@@ -133,7 +133,7 @@ function buildLegacyPayload(selection, token) {
 
     return {
         token,
-        lines: bars,
+        lines: finalizeGeneratedLines(bars),
     };
 }
 
@@ -149,8 +149,8 @@ function createClusterLyrics(seed) {
         }
 
         const rapper = pickRapper(rng, usedRappers);
-        const fullLine = sentences[sentenceIndex].replaceAll("[래퍼]", rapper);
-        const splitBars = splitByWordCount(fullLine, 6);
+        const fullLine = renderSentenceWithRapper(sentences[sentenceIndex], rapper);
+        const splitBars = splitByWordCount(fullLine, 6).map((bar) => ensureMinimumEojeol(bar, 6));
         candidates.push({
             sentenceIndex,
             rapper,
@@ -161,7 +161,7 @@ function createClusterLyrics(seed) {
 
     const exactPlan = findExactLinePlan(candidates, LINE_COUNT);
     if (exactPlan) {
-        return exactPlan.flatMap((candidate) => candidate.bars);
+        return finalizeGeneratedLines(exactPlan.flatMap((candidate) => candidate.bars));
     }
 
     const lines = [];
@@ -195,7 +195,7 @@ function createClusterLyrics(seed) {
         }
     }
 
-    return lines.slice(0, LINE_COUNT);
+    return finalizeGeneratedLines(lines.slice(0, LINE_COUNT));
 }
 
 function findExactLinePlan(candidates, targetLineCount) {
@@ -325,6 +325,88 @@ function splitIntoBars(text, depth = 0) {
     ];
 }
 
+function renderSentenceWithRapper(sentence, rapper) {
+    if (!sentence.includes("[래퍼]")) {
+        return sentence;
+    }
+
+    const pairParticles = [
+        ["으로", "로"],
+        ["까지", "까지"],
+        ["부터", "부터"],
+        ["에게", "에게"],
+        ["한테", "한테"],
+        ["처럼", "처럼"],
+        ["보다", "보다"],
+        ["조차", "조차"],
+        ["마저", "마저"],
+        ["마냥", "마냥"],
+        ["만", "만"],
+        ["도", "도"],
+        ["랑", "랑"],
+        ["하고", "하고"],
+        ["의", "의"],
+        ["은", "는"],
+        ["를", "를"],
+        ["이", "가"],
+        ["과", "와"],
+    ];
+
+    let rendered = sentence;
+
+    for (const [withFinal, withoutFinal] of pairParticles) {
+        const pattern = new RegExp(`\\[래퍼\\]${withFinal}`, "g");
+        rendered = rendered.replace(pattern, `${rapper}${chooseParticle(rapper, withFinal, withoutFinal)}`);
+    }
+
+    rendered = rendered.replace(/\[래퍼\]/g, `${rapper}가`);
+    return rendered;
+}
+
+function chooseParticle(rapper, withFinal, withoutFinal) {
+    if (!rapper) {
+        return withoutFinal;
+    }
+
+    const lastCharacter = rapper.trim().slice(-1);
+    const hasFinalConsonant = hasFinalConsonantInHangul(lastCharacter);
+
+    if (withFinal === "으로") {
+        return hasFinalConsonant ? "으로" : "로";
+    }
+
+    if (withFinal === "이") {
+        return hasFinalConsonant ? "이" : "가";
+    }
+
+    if (withFinal === "은") {
+        return hasFinalConsonant ? "은" : "는";
+    }
+
+    if (withFinal === "을") {
+        return hasFinalConsonant ? "을" : "를";
+    }
+
+    if (withFinal === "과") {
+        return hasFinalConsonant ? "과" : "와";
+    }
+
+    return withoutFinal;
+}
+
+function hasFinalConsonantInHangul(character) {
+    if (!character) {
+        return false;
+    }
+
+    const code = character.charCodeAt(0) - 0xac00;
+    if (code < 0 || code > 11171) {
+        return false;
+    }
+
+    return code % 28 !== 0;
+}
+
 function countBeatSyllables(text) {
     const tokens = text.match(/[가-힣]+|[A-Za-z0-9]+(?:[._'-][A-Za-z0-9]+)*/g) || [];
 
@@ -356,16 +438,7 @@ function splitByWordCount(text, chunkSize = 6) {
         chunks.push(words.slice(index, index + chunkSize));
     }
 
-    if (chunks.length > 1) {
-        const lastChunk = chunks[chunks.length - 1];
-        const prevChunk = chunks[chunks.length - 2];
-
-        if (lastChunk.length <= 2 && prevChunk.length > 4) {
-            while (lastChunk.length < 4 && prevChunk.length > 4) {
-                lastChunk.unshift(prevChunk.pop());
-            }
-        }
-    }
+    rebalanceTailChunk(chunks, 6);
 
     return chunks.map((chunk) => chunk.join(" "));
 }
@@ -394,10 +467,63 @@ function splitByTargetLineCount(text, lineCount) {
         chunks[slot].push(words[index]);
     }
 
+    rebalanceTailChunk(chunks, 6);
+
     return chunks
         .filter((chunk) => chunk.length > 0)
         .map((chunk) => chunk.join(" "));
 }
+
+function rebalanceTailChunk(chunks, minimumTailWords) {
+    if (chunks.length <= 1) {
+        return chunks;
+    }
+
+    const tail = chunks[chunks.length - 1];
+    const previous = chunks[chunks.length - 2];
+
+    while (tail.length < minimumTailWords && previous.length > minimumTailWords) {
+        tail.unshift(previous.pop());
+    }
+
+    if (tail.length < minimumTailWords && previous.length > 1) {
+        while (tail.length < minimumTailWords && previous.length > 1) {
+            tail.unshift(previous.pop());
+        }
+    }
+
+    return chunks;
+}
+
+function finalizeGeneratedLines(lines) {
+    return lines
+        .map((line, index) => ensureMinimumEojeol(line, 6, index === lines.length - 1))
+        .slice(0, LINE_COUNT);
+}
+
+function ensureMinimumEojeol(line, minimumCount, isFinalLine = false) {
+    const normalized = String(line || "").replace(/\s+/g, " ").trim();
+    const words = normalized ? normalized.split(" ") : [];
+    const fillers = isFinalLine ? FINAL_LINE_FILLERS : GENERAL_FILLERS;
+    let cursor = 0;
+
+    while (words.length < minimumCount) {
+        words.push(fillers[cursor % fillers.length]);
+        cursor += 1;
+    }
+
+    if (words.length > 0) {
+        const lastWord = words[words.length - 1];
+        if (/[,·…-]$/.test(lastWord)) {
+            words[words.length - 1] = lastWord.replace(/[,·…-]+$/, "");
+        }
+    }
+
+    return words.join(" ").replace(/\s+/g, " ").trim();
+}
+
+const GENERAL_FILLERS = ["끝까지", "한 번 더", "다시", "그대로", "바로", "천천히"];
+const FINAL_LINE_FILLERS = ["마무리해", "여기서 닫아", "끝까지 가", "이제 끝내", "마침표 찍어", "여기서 끝"];
 
 function encodeSecureSeed(seed, prefix) {
     const payload = Buffer.allocUnsafe(8);
