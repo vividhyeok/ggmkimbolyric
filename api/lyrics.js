@@ -125,25 +125,100 @@ function buildLegacyPayload(selection, token) {
 
 function createClusterLyrics(seed) {
     const rng = createMulberry32(seed);
-    const lines = [];
+    const candidates = [];
     const usedRappers = new Set();
     const sentenceOrder = pickUniqueIndexes(sentences.length, sentences.length, rng);
 
     for (const sentenceIndex of sentenceOrder) {
+        if (usedRappers.size >= rappers.length) {
+            break;
+        }
+
         const rapper = pickRapper(rng, usedRappers);
         const fullLine = sentences[sentenceIndex].replaceAll("[래퍼]", rapper);
         const splitBars = splitByWordCount(fullLine, 6);
+        candidates.push({
+            sentenceIndex,
+            rapper,
+            fullLine,
+            bars: splitBars,
+        });
+    }
 
-        for (const bar of splitBars) {
-            lines.push(bar);
+    const exactPlan = findExactLinePlan(candidates, LINE_COUNT);
+    if (exactPlan) {
+        return exactPlan.flatMap((candidate) => candidate.bars);
+    }
 
-            if (lines.length >= LINE_COUNT) {
-                return lines;
+    const lines = [];
+    const usedSentenceIndexes = new Set();
+
+    for (const candidate of candidates) {
+        const remaining = LINE_COUNT - lines.length;
+        if (candidate.bars.length <= remaining) {
+            lines.push(...candidate.bars);
+            usedSentenceIndexes.add(candidate.sentenceIndex);
+        }
+
+        if (lines.length >= LINE_COUNT) {
+            return lines;
+        }
+    }
+
+    const remaining = LINE_COUNT - lines.length;
+    if (remaining > 0) {
+        const fallbackCandidate = candidates.find((candidate) => {
+            if (usedSentenceIndexes.has(candidate.sentenceIndex)) {
+                return false;
             }
+
+            const wordCount = countWords(candidate.fullLine);
+            return wordCount >= remaining;
+        });
+
+        if (fallbackCandidate) {
+            lines.push(...splitByTargetLineCount(fallbackCandidate.fullLine, remaining));
         }
     }
 
     return lines.slice(0, LINE_COUNT);
+}
+
+function findExactLinePlan(candidates, targetLineCount) {
+    const memo = new Map();
+
+    function dfs(index, remaining) {
+        if (remaining === 0) {
+            return [];
+        }
+
+        if (index >= candidates.length || remaining < 0) {
+            return null;
+        }
+
+        const key = `${index}:${remaining}`;
+        if (memo.has(key)) {
+            return memo.get(key);
+        }
+
+        const current = candidates[index];
+        const takeLength = current.bars.length;
+
+        if (takeLength <= remaining) {
+            const takeRest = dfs(index + 1, remaining - takeLength);
+            if (takeRest) {
+                const result = [current, ...takeRest];
+                memo.set(key, result);
+                return result;
+            }
+        }
+
+        const skip = dfs(index + 1, remaining);
+        memo.set(key, skip);
+        return skip;
+    }
+
+    return dfs(0, targetLineCount);
 }
 
 function createSelectionFromSeed(seed) {
@@ -279,6 +354,35 @@ function splitByWordCount(text, chunkSize = 6) {
     }
 
     return chunks.map((chunk) => chunk.join(" "));
+}
+
+function countWords(text) {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+        return 0;
+    }
+
+    return normalized.split(" ").length;
+}
+
+function splitByTargetLineCount(text, lineCount) {
+    const normalized = text.replace(/\s+/g, " ").trim();
+    if (!normalized || lineCount <= 1) {
+        return normalized ? [normalized] : [];
+    }
+
+    const words = normalized.split(" ");
+    const target = Math.max(1, Math.min(lineCount, words.length));
+    const chunks = Array.from({ length: target }, () => []);
+
+    for (let index = 0; index < words.length; index += 1) {
+        const slot = Math.min(target - 1, Math.floor((index * target) / words.length));
+        chunks[slot].push(words[index]);
+    }
+
+    return chunks
+        .filter((chunk) => chunk.length > 0)
+        .map((chunk) => chunk.join(" "));
 }
 
 function encodeSecureSeed(seed, prefix) {
