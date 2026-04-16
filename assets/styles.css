@@ -16,7 +16,7 @@ body {
 }
 
 .app {
-    width: min(100%, 760px);
+    width: min(100%, 1240px);
     min-height: 100svh;
     margin: 0 auto;
     padding: max(24px, env(safe-area-inset-top)) 16px calc(132px + env(safe-area-inset-bottom)) 16px;
@@ -48,8 +48,15 @@ body {
     word-break: keep-all;
 }
 
+.main-pane {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+}
+
 .beat-box {
-    margin-bottom: 16px;
     border: 2px solid #000000;
     background: #ffffff;
     overflow: hidden;
@@ -118,7 +125,7 @@ body {
 }
 
 .action-bar-inner {
-    width: min(100%, 760px);
+    width: min(100%, 1240px);
     margin: 0 auto;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -145,6 +152,42 @@ body {
 .error {
     font-size: 1rem;
     line-height: 1.7;
+}
+
+@media (min-width: 980px) {
+    .app {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+
+    .hero {
+        padding-bottom: 22px;
+    }
+
+    .main-pane {
+        display: grid;
+        grid-template-columns: minmax(420px, 0.95fr) minmax(520px, 1.05fr);
+        align-items: start;
+        gap: 20px;
+    }
+
+    .beat-box {
+        position: sticky;
+        top: max(24px, env(safe-area-inset-top));
+    }
+
+    .beat-frame {
+        min-height: 320px;
+    }
+
+    .output {
+        min-height: 540px;
+        padding: 24px 22px;
+    }
+
+    .lyrics {
+        gap: 16px;
+    }
 }
 
 @media (max-width: 520px) {
